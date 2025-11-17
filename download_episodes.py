@@ -121,9 +121,6 @@ def get_random_user_agent() -> str:
     return random.choice(USER_AGENTS)
 
 
-# ------------------------------------------------------------------
-# Podcast Page Download
-# ------------------------------------------------------------------
 def download_podcast_pages(base_url: str, num_pages: int, output_dir: pathlib.Path, delay: float = 1.0) -> None:
     """
     Download all podcast list pages from Podbean.
@@ -164,9 +161,6 @@ def download_podcast_pages(base_url: str, num_pages: int, output_dir: pathlib.Pa
     logger.info(f"All {num_pages} pages downloaded to '{output_dir}'")
 
 
-# ------------------------------------------------------------------
-# Episode Link Collection (from episode_details.py)
-# ------------------------------------------------------------------
 def extract_links_from_file(file_path: pathlib.Path) -> list[str]:
     """Return a list of URLs found inside <div id='episode-list-content'>."""
     if not file_path.is_file():
@@ -226,9 +220,6 @@ def collect_episode_urls(input_dir: pathlib.Path, output_file: pathlib.Path) -> 
         logger.error(f"Could not write to {output_file}: {exc}")
 
 
-# ------------------------------------------------------------------
-# Helpers - make names filesystem-safe but keep spaces
-# ------------------------------------------------------------------
 def sanitize_name(name: str, max_length: int = 250) -> str:
     """
     Replace every character that is unsafe for a file name with an
@@ -249,9 +240,6 @@ def sanitize_name(name: str, max_length: int = 250) -> str:
     return name
 
 
-# ------------------------------------------------------------------
-# Helpers - get the safe, original-filename from a contentUrl
-# ------------------------------------------------------------------
 def filename_from_contenturl(url: str, max_length: int = 250) -> str:
     """
     Given a contentUrl (e.g.
@@ -277,9 +265,6 @@ def filename_from_contenturl(url: str, max_length: int = 250) -> str:
     return result
 
 
-# ------------------------------------------------------------------
-# Helpers - check if episode already downloaded
-# ------------------------------------------------------------------
 def episode_already_exists(episode_dir: pathlib.Path) -> bool:
     """
     Check if the episode directory exists and contains:
@@ -316,9 +301,6 @@ def episode_already_exists(episode_dir: pathlib.Path) -> bool:
     return has_audio
 
 
-# ------------------------------------------------------------------
-# Helpers - download a file using streaming
-# ------------------------------------------------------------------
 def download_file(url: str, destination: pathlib.Path) -> None:
     """
     Stream-download *url* and write it to *destination*.
@@ -336,9 +318,6 @@ def download_file(url: str, destination: pathlib.Path) -> None:
         raise RuntimeError(f"Could not download {url}: {exc}") from exc
 
 
-# ------------------------------------------------------------------
-# Core processing - one episode page
-# ------------------------------------------------------------------
 def process_episode(page_url: str, root_dir: pathlib.Path) -> None:
     """Download page, parse its JSON, and save all artefacts."""
     logger.info(f"Processing: {page_url}")
@@ -476,4 +455,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
