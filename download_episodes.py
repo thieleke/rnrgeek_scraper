@@ -13,7 +13,7 @@ Complete podcast episode download workflow for the Rock and Roll Geek Show archi
    - Extracts episode links from <div id='episode-list-content'>
    - Writes all URLs to episode_links.json
 
-3. Download each episode's metadata, description, and audio file
+3. Download each episode's metadata, description, and audio/video file
    - Fetches the episode page and extracts JSON-LD metadata
    - Saves metadata.json with full episode data
    - Saves description.txt with episode description (or "No Description" if empty)
@@ -27,7 +27,7 @@ Episode folder structure:
         description.txt
         <original-media-filename>.mp3
 
-The script automatically skips episodes that already exist with all required files (metadata, description, audio).
+The script automatically skips episodes that already exist with all required files (metadata, description, audio/video).
 
 Configuration:
     - BASE_URL: Podbean podcast page URL
@@ -267,7 +267,7 @@ def episode_already_exists(episode_dir: pathlib.Path) -> bool:
     Check if the episode directory exists and contains:
     - metadata.json (valid JSON)
     - description.txt (non-empty)
-    - at least one audio file (.mp3, .m4a, .wav, etc.)
+    - at least one audio/video file (.mp3, .m4a, .wav, etc.)
     """
     if not episode_dir.exists():
         return False
@@ -288,7 +288,7 @@ def episode_already_exists(episode_dir: pathlib.Path) -> bool:
         return False
 
     # Check for at least one audio/video file
-    audio_extensions = {".mp3", ".m4a", ".mp4", ".wav", ".ogg", ".flac", ".aac"}
+    audio_extensions = {".mp3", ".m4a", ".mp4", ".wav", ".ogg", ".flac", ".aac", ".webm", ".mov", ".avi"}
     has_audio = any(
         f.suffix.lower() in audio_extensions
         for f in episode_dir.iterdir()
@@ -406,10 +406,10 @@ def main() -> None:
     3. Download each episode's metadata, description, and audio file
     """
     # Step 1: Download podcast list pages from Podbean
-    logger.info("=" * 70)
-    logger.info("STEP 1: Downloading podcast list pages from Podbean")
-    logger.info("=" * 70)
-    download_podcast_pages(BASE_URL, NUM_PAGES, DEFAULT_INPUT_DIR, PAGE_DELAY_IN_SEC)
+    #logger.info("=" * 70)
+    #logger.info("STEP 1: Downloading podcast list pages from Podbean")
+    #logger.info("=" * 70)
+    #download_podcast_pages(BASE_URL, NUM_PAGES, DEFAULT_INPUT_DIR, PAGE_DELAY_IN_SEC)
 
     # Step 2: Collect episode URLs from HTML pages and generate episode_links.json
     logger.info("=" * 70)
