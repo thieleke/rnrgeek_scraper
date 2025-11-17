@@ -287,8 +287,8 @@ def episode_already_exists(episode_dir: pathlib.Path) -> bool:
     if not desc_file.is_file():
         return False
 
-    # Check for at least one audio file
-    audio_extensions = {".mp3", ".m4a", ".wav", ".ogg", ".flac", ".aac"}
+    # Check for at least one audio/video file
+    audio_extensions = {".mp3", ".m4a", ".mp4", ".wav", ".ogg", ".flac", ".aac"}
     has_audio = any(
         f.suffix.lower() in audio_extensions
         for f in episode_dir.iterdir()
