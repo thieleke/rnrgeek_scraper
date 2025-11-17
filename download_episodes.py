@@ -2,11 +2,11 @@
 """
 download_episodes.py
 --------------------
-Complete podcast episode download workflow for Rock and Roll Geek Show:
+Complete podcast episode download workflow for the Rock and Roll Geek Show archive on podbean.com.
 
 1. Download podcast list pages from Podbean
    - Downloads all HTML pages (page001.html, page002.html, etc.)
-   - Saves them to output_podbean/ directory
+   - Saves to output_podbean/ directory
 
 2. Extract episode URLs from HTML page files
    - Parses each downloaded HTML page
@@ -19,15 +19,15 @@ Complete podcast episode download workflow for Rock and Roll Geek Show:
    - Saves description.txt with episode description (or "No Description" if empty)
    - Downloads the media file using the original filename from contentUrl
 
-All HTTP requests use a Chrome-for-Windows User-Agent.
+All HTTP requests use a randomized User-Agent header from a predefined pool to avoid detection.
 
 Episode folder structure:
-    Episodes/<datePublished> - <sanitized-name>/
+    Episodes/<datePublished> - <episode-name>/
         metadata.json
         description.txt
         <original-media-filename>.mp3
 
-The script automatically skips episodes that already exist with all required files.
+The script automatically skips episodes that already exist with all required files (metadata, description, audio).
 
 Configuration:
     - BASE_URL: Podbean podcast page URL
@@ -37,13 +37,13 @@ Configuration:
 """
 
 import json
+import logging
+import os
 import pathlib
+import random
 import re
 import time
 from urllib.parse import urlparse
-import os
-import random
-import logging
 
 import requests
 from bs4 import BeautifulSoup
@@ -73,9 +73,6 @@ logger.addHandler(file_handler)
 # Prevent propagation to root logger (avoid duplicate messages)
 logger.propagate = False
 
-# ------------------------------------------------------------------
-# Configuration
-# ------------------------------------------------------------------
 # Podcast page download configuration
 BASE_URL = "https://www.podbean.com/podcast-detail/nmr9z-42c7f/The-Rock-and-Roll-Geek-Show-Podcast?page="
 NUM_PAGES = 263  # TODO: set this to the actual number of pages (accurate as of November 2025)
