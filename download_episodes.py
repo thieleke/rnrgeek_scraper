@@ -22,7 +22,7 @@ Complete podcast episode download workflow for the Rock and Roll Geek Show archi
 All HTTP requests use a randomized User-Agent header from a predefined pool to avoid detection.
 
 Episode folder structure:
-    Episodes/<datePublished> - <episode-name>/
+    episodes/<datePublished> - <episode-name>/
         metadata.json
         description.txt
         <original-media-filename>.mp3
@@ -84,7 +84,7 @@ FILE_TEMPLATE = "page{num:03}.html"   # e.g. page001.html, page002.html
 
 # Episode download configuration
 INPUT_JSON   = pathlib.Path("episode_links.json")  # list of page URLs
-OUTPUT_ROOT  = pathlib.Path("Episodes")            # top-level folder
+OUTPUT_ROOT  = pathlib.Path("episodes")            # top-level folder
 DELAY_IN_SEC = 0.5                                 # pause between episode downloads
 HTTP_TIMEOUT = 30                                  # timeout for HTTP requests in seconds
 
@@ -220,20 +220,27 @@ def collect_episode_urls(input_dir: pathlib.Path, output_file: pathlib.Path) -> 
 def sanitize_name(name: str, max_length: int = 250) -> str:
     """
     Replace every character that is unsafe for a file name with an
-    underscore, keep letters, digits, hyphens, underscores and spaces.
+    underscore, keep only ASCII letters, digits, hyphens, underscores, spaces, and forward slashes.
+    Remove all unicode and non-filename safe characters.
     Collapse multiple spaces or underscores into a single space,
     and trim surrounding whitespace.
     Limit the result to max_length characters (default 250).
     """
+    import unicodedata
     name = name.strip()
-    name = re.sub(r'[^A-Za-z0-9_\- ]+', "_", name)
+    # Normalize unicode to NFKD and encode to ASCII, ignoring non-ASCII
+    name = unicodedata.normalize('NFKD', name).encode('ascii', 'ignore').decode('ascii')
+    # Replace any character not safe for filenames (including /) with underscore
+    name = re.sub(r'[^A-Za-z0-9_\- /]+', "_", name)
+    # Collapse multiple spaces or underscores into a single space
     name = re.sub(r"[_\s]+", " ", name)
-    name = name or "episode"
-
+    name = name.strip() or "episode"
     # Truncate to max_length if needed
     if len(name) > max_length:
         name = name[:max_length].rstrip()
-
+    # Remove a trailing slash if present
+    while name.endswith('/'):
+        name = name[:-1].rstrip()
     return name
 
 
@@ -254,7 +261,7 @@ def filename_from_contenturl(url: str, max_length: int = 250) -> str:
     available_length = max_length - len(ext)
 
     # Sanitize the stem without length limit first, then truncate
-    safe_stem = sanitize_name(stem, max_length=available_length).replace(' ', '_')
+    safe_stem = sanitize_name(stem, max_length=available_length).replace(' ', '_').strip()
 
     # Build the final filename
     result = f"{safe_stem}{ext}"
@@ -279,7 +286,8 @@ def episode_already_exists(episode_dir: pathlib.Path) -> bool:
     try:
         with open(metadata_file, encoding="utf-8") as f:
             json.load(f)
-    except Exception:
+    except:
+        logger.exception(f"Invalid JSON in {metadata_file}")
         return False
 
     # Check for description.txt
@@ -344,7 +352,7 @@ def process_episode(page_url: str, root_dir: pathlib.Path) -> None:
         return
 
     # 3. Pull fields we care about
-    name         = data.get("name")
+    name         = (data.get("name") or "").strip()
     description  = (data.get("description") or "").strip()
     content_url  = data.get("associatedMedia", {}).get("contentUrl")
     date_publish = data.get("datePublished")
@@ -395,7 +403,53 @@ def process_episode(page_url: str, root_dir: pathlib.Path) -> None:
         download_file(content_url, media_file)
         logger.info(f"Media saved to {media_file}")
     except Exception as exc:
-        logger.warning(f"Media download failed: {exc}")
+        logger.exception(f"Media download failed for {content_url}: {exc}")
+
+
+def get_downloaded_urls(root_dir: pathlib.Path) -> set[str]:
+    """
+    Scan the output directory for already downloaded episodes and return a set of their URLs.
+
+    Args:
+        root_dir: The root directory where episode folders are stored (e.g., "Episodes").
+
+    Returns:
+        A set of URLs corresponding to already downloaded episodes.
+    """
+    downloaded_urls = list()
+    if not root_dir.exists():
+        return set(downloaded_urls)
+
+    logger.info(f"Scanning for already downloaded episodes in '{root_dir}'...")
+    for episode_dir in root_dir.iterdir():
+        if not episode_dir.is_dir():
+            logger.warning(f"Skipping non-directory item: {episode_dir}")
+            continue
+
+        metadata_file = episode_dir / "metadata.json"
+        if not metadata_file.is_file():
+            logger.warning(f"Missing metadata.json in {episode_dir}, skipping.")
+            continue
+
+        try:
+            with metadata_file.open(encoding="utf-8") as f:
+                data = json.load(f)
+
+            # The 'url' in the JSON-LD is the download link for the episode
+            episode_url = data.get("url")
+            if episode_url:
+                downloaded_urls.append(episode_url)
+            else:
+                logger.warning(f"Skipping episode url: {episode_url}")
+        except (json.JSONDecodeError, OSError) as exc:
+            logger.warning(f"Could not read or parse metadata file {metadata_file}: {exc}")
+            continue
+
+    if len(set(downloaded_urls)) != len(downloaded_urls):
+        logger.warning("Duplicate URLs found among downloaded episodes.")
+
+    logger.info(f"Found {len(set(downloaded_urls))} previously downloaded episodes.")
+    return set(downloaded_urls)
 
 
 def main() -> None:
@@ -406,10 +460,10 @@ def main() -> None:
     3. Download each episode's metadata, description, and audio file
     """
     # Step 1: Download podcast list pages from Podbean
-    #logger.info("=" * 70)
-    #logger.info("STEP 1: Downloading podcast list pages from Podbean")
-    #logger.info("=" * 70)
-    #download_podcast_pages(BASE_URL, NUM_PAGES, DEFAULT_INPUT_DIR, PAGE_DELAY_IN_SEC)
+    logger.info("=" * 70)
+    logger.info("STEP 1: Downloading podcast list pages from Podbean")
+    logger.info("=" * 70)
+    download_podcast_pages(BASE_URL, NUM_PAGES, DEFAULT_INPUT_DIR, PAGE_DELAY_IN_SEC)
 
     # Step 2: Collect episode URLs from HTML pages and generate episode_links.json
     logger.info("=" * 70)
@@ -432,15 +486,42 @@ def main() -> None:
         logger.error(f"{INPUT_JSON} must contain a JSON array of URLs")
         return
 
+    # Scan for already downloaded episodes and filter them out
+    downloaded_urls = get_downloaded_urls(OUTPUT_ROOT)
+
+    # Create a dictionary mapping the unique ID to the correct canonical URL
+    url_map = {re.search(r'dir-[a-z0-9]+-[a-z0-9]+', url).group(0): url for url in urls if re.search(r'dir-[a-z0-9]+-[a-z0-9]+', url)}
+
+    # Get the set of IDs that have already been downloaded
+    downloaded_ids = {re.search(r'dir-[a-z0-9]+-[a-z0-9]+', url).group(0) for url in downloaded_urls if re.search(r'dir-[a-z0-9]+-[a-z0-9]+', url)}
+
+    # Determine the IDs of episodes that need to be processed
+    ids_to_process = set(url_map.keys()) - downloaded_ids
+
+    # Build the list of URLs to process using the correct canonical URLs from the map
+    urls_to_process = [url_map[id] for id in ids_to_process]
+
+    print(urls_to_process)
+
+    original_url_count = len(url_map)
+    removed_count = original_url_count - len(urls_to_process)
+
+    if removed_count > 0:
+        logger.info(f"Removed {removed_count} already downloaded episodes from the queue.")
+
+    if not urls_to_process:
+        logger.info("All episodes have already been downloaded. Nothing to do.")
+        return
+
     # Randomize the order of URLs to make download pattern less predictable
-    random.shuffle(urls)
-    logger.info(f"Randomized {len(urls)} episode URLs for processing")
+    random.shuffle(urls_to_process)
+    logger.info(f"Randomized {len(urls_to_process)} episode URLs for processing")
 
     OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
 
-    for i, url in enumerate(urls, start=1):
+    for i, url in enumerate(urls_to_process, start=1):
         logger.info(f"\n{'='*70}")
-        logger.info(f"Episode {i}/{len(urls)}")
+        logger.info(f"Episode {i}/{len(urls_to_process)}")
         logger.info(f"{'='*70}")
         process_episode(url, OUTPUT_ROOT)
         time.sleep(DELAY_IN_SEC)

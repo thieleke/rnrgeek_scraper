@@ -208,4 +208,9 @@ __marimo__/
 
 ._*
 .DS*
-
+episodes/
+podbean_pages/
+output_podbean/
+episode_links.json
+output.log
+.idea
