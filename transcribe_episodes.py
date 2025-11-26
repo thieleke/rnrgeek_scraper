@@ -62,11 +62,11 @@ FFMPEG_EXECUTABLE = WHISPER_PATH / "ffmpeg.exe"
 
 # OpenAI-compatible API Configuration for AI Summarization
 # TODO: Update these settings for your LLM server
-OPENAI_API_URL = "http://localhost:1234/v1/chat/completions"  # LM Studio default
-OPENAI_API_KEY = "lm-studio"  # Some servers require this, even if it's a placeholder
+OPENAI_API_URL = "http://10.0.0.1:1234/v1/chat/completions"  # LM Studio default
+OPENAI_API_KEY = ""  # Some servers require this, even if it's a placeholder
 OPENAI_MODEL = "local-model"  # Model name (often ignored by local servers)
-OPENAI_MAX_TOKENS = 2000  # Maximum tokens for the summary response
-OPENAI_TEMPERATURE = 0.7  # Temperature for response generation (0.0 = deterministic, 1.0 = creative)
+OPENAI_MAX_TOKENS = 65535  # Maximum tokens for the summary response
+OPENAI_TEMPERATURE = 0.5  # Temperature for response generation (0.0 = deterministic, 1.0 = creative)
 
 # Audio/video file extensions to process
 MEDIA_EXTENSIONS = {".mp3", ".m4a", ".mp4", ".wav", ".ogg", ".flac", ".aac", ".webm", ".mov", ".avi", ".m4v"}
@@ -186,7 +186,7 @@ def ai_summarize_episode(transcript_file: pathlib.Path) -> bool:
         logger.error(f"Transcript file not found: {transcript_file}")
         return False
 
-    summary_file = transcript_file.parent / "ai_show_summary.txt"
+    summary_file = transcript_file.parent / "ai_show_summary.md"
 
     # Check if summary already exists
     if summary_file.exists() and summary_file.stat().st_size > 0:
@@ -207,7 +207,8 @@ def ai_summarize_episode(transcript_file: pathlib.Path) -> bool:
         # Prepare the prompt
         system_prompt = (
             "You are an expert podcast analyzer. Generate comprehensive, well-structured "
-            "summaries of podcast episodes that capture all key information."
+            "summaries of podcast episodes that capture all key information, in Markdown format. "
+            "Focus on clarity and detail to provide value to listeners seeking episode insights. "
         )
 
         user_prompt = (
@@ -243,7 +244,7 @@ def ai_summarize_episode(transcript_file: pathlib.Path) -> bool:
             OPENAI_API_URL,
             headers=headers,
             json=payload,
-            timeout=300  # 5 minute timeout for long transcripts
+            timeout=600  # 10 minute timeout for long transcripts
         )
 
         response.raise_for_status()
