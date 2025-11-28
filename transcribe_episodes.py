@@ -550,6 +550,464 @@ Show Summary:
         return False
 
 
+def generate_episode_html(episode_dir: pathlib.Path) -> bool:
+    """
+    Generate a pretty HTML file for an episode by combining metadata, description, and AI summary.
+
+    Reads metadata.json to get the episode name and date, then creates an HTML file with:
+    - Styled header with episode title (date - name)
+    - Episode description
+    - AI-generated summary (if available)
+
+    Args:
+        episode_dir: Path to the episode directory
+
+    Returns:
+        True if HTML was generated successfully, False otherwise
+    """
+    html_file = episode_dir / "episode.html"
+
+    # Skip if HTML already exists
+    #if html_file.exists() and html_file.stat().st_size > 0:
+    #    logger.info(f"SKIP - HTML already exists: {html_file.name}")
+    #    return True
+
+    # Read metadata.json
+    metadata_file = episode_dir / "metadata.json"
+    if not metadata_file.exists():
+        logger.warning(f"Missing metadata.json in {episode_dir.name}")
+        return False
+
+    try:
+        with open(metadata_file, 'r', encoding='utf-8', errors='replace') as f:
+            metadata = json.load(f)
+    except (OSError, IOError, json.JSONDecodeError) as exc:
+        logger.error(f"Error reading metadata from {episode_dir.name}: {exc}")
+        return False
+
+    # Extract name and date from metadata
+    episode_name = metadata.get("name", "Unknown Episode")
+    date_published = metadata.get("datePublished", "Unknown Date")
+
+    # Extract audio/media URL from associatedMedia
+    content_url = ""
+    associated_media = metadata.get("associatedMedia", {})
+    if isinstance(associated_media, dict):
+        content_url = associated_media.get("contentUrl", "")
+
+    # Read description.txt
+    description_file = episode_dir / "description.txt"
+    description = ""
+    if description_file.exists():
+        try:
+            with open(description_file, 'r', encoding='utf-8', errors='replace') as f:
+                description = f.read()
+        except (OSError, IOError) as exc:
+            logger.warning(f"Error reading description from {episode_dir.name}: {exc}")
+
+    # Read ai_show_summary.md (optional)
+    summary_file = episode_dir / "ai_show_summary.md"
+    summary = ""
+    if summary_file.exists():
+        try:
+            with open(summary_file, 'r', encoding='utf-8', errors='replace') as f:
+                summary = f.read()
+        except (OSError, IOError) as exc:
+            logger.warning(f"Error reading AI summary from {episode_dir.name}: {exc}")
+
+    # Build the HTML content
+    html_prefix = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Rock & Roll Geek Show – {title}</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* ------------- Theme & Basics ------------- */
+:root{{
+  /* Colors */
+  --bg: #FAFAFA;
+  --text: #3A3A3A;
+  --accent: #E63946;
+  --primary: #1A1A1D;
+  --border: #DADADA;
+  --code-bg: #F5F5F5;
+}}
+*, *::before, *::after{{box-sizing:border-box;}}
+body{{
+  margin:0 auto;
+  max-width:1200px;
+  padding:2rem 1rem;
+  background:var(--bg);
+  color:var(--text);
+  line-height:1.6;
+  font-family:'Roboto',sans-serif;
+}}
+h1,h2{{font-family:'Merriweather', serif; }}
+h1{{margin:0 0 .75rem; font-size:2.5rem; color:var(--primary); }}
+h2{{margin:2rem 0 .5rem; font-size:1.75rem; color:var(--primary); }}
+strong{{color:var(--accent);}}
+p{{margin:.75rem 0;}}
+hr{{
+  border:none;
+  height:1px;
+  background:var(--border);
+  margin:2rem 0;
+}}
+blockquote{{
+  margin:.75rem 0;
+  padding:.8rem 1.2rem;
+  color:var(--text);
+  background:var(--code-bg);
+  border-left:.25rem solid var(--accent);
+  font-style:italic;
+}}
+blockquote p{{margin:0;}}
+table{{
+  width:100%;
+  border-collapse:collapse;
+  margin:1rem 0;
+}}
+th,td{{
+  padding:.75rem 1rem;
+  text-align:left;
+}}
+th{{
+  background:var(--primary);
+  color:white;
+}}
+tbody tr:nth-child(odd){{background:var(--code-bg);}}
+tbody tr:hover{{background:#EEE;}}
+ul{{margin:0 0 1rem 1.25rem;}}
+ul li{{margin:.3rem 0;}}
+ul ul{{margin-left:.75rem;}}
+code{{
+  font-family:'Source Code Pro',monospace,serif;
+  background:var(--code-bg);
+  padding:.1rem .4rem;
+  border-radius:3px;
+}}
+
+/* ------------- Audio Player ------------- */
+.audio-player-container{{
+  margin: 1.5rem 0;
+  padding: 1.25rem;
+  background: var(--code-bg);
+  border-left: 4px solid var(--accent);
+  border-radius: 4px;
+}}
+.audio-player-label{{
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--primary);
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}}
+.audio-player-label svg{{
+  width: 1.5rem;
+  height: 1.5rem;
+  fill: var(--accent);
+  flex-shrink: 0;
+}}
+audio{{
+  width: 100%;
+  margin-top: 0.5rem;
+  outline: none;
+}}
+audio::-webkit-media-controls-panel{{
+  background-color: var(--bg);
+}}
+audio::-webkit-media-controls-play-button,
+audio::-webkit-media-controls-pause-button{{
+  background-color: var(--accent);
+  border-radius: 50%;
+}}
+
+/* ------------- Transcript Section ------------- */
+.transcript-section{{
+  margin: 2rem 0;
+}}
+.transcript-toggle{{
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1rem;
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--primary);
+  transition: all 0.3s ease;
+  user-select: none;
+}}
+.transcript-toggle:hover{{
+  background: #E8E8E8;
+}}
+.transcript-toggle svg{{
+  width: 1.25rem;
+  height: 1.25rem;
+  fill: var(--accent);
+  transition: transform 0.3s ease;
+  flex-shrink: 0;
+}}
+.transcript-toggle.active svg{{
+  transform: rotate(90deg);
+}}
+.transcript-content{{
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+}}
+.transcript-content.active{{
+  max-height: 600px;
+  overflow-y: auto;
+  padding: 1rem;
+}}
+.transcript-content pre{{
+  margin: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-family: 'Courier New', monospace;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: var(--text);
+}}
+
+/* ------------- Mobile friendly ------------- */
+@media (max-width:768px){{
+  body{{
+    padding: 1.5rem 1rem;
+  }}
+  h1{{font-size:2rem;}}
+  h2{{font-size:1.5rem;}}
+  table,th,td{{display:block; width:100%;}}
+  tr{{border-bottom:1px solid var(--border);}}
+  th{{position:sticky;top:0;}}
+}}
+</style>
+</head>
+
+<body>
+"""
+
+    html_suffix = """</body>
+</html>"""
+
+    # Create the page title
+    page_title = f"{date_published} - {episode_name}"
+
+    # Escape HTML special characters in content
+    def escape_html(text):
+        """Escape HTML special characters"""
+        return (text.replace('&', '&amp;')
+                    .replace('<', '&lt;')
+                    .replace('>', '&gt;')
+                    .replace('"', '&quot;')
+                    .replace("'", '&#39;'))
+
+    # Convert markdown to HTML using pandoc
+    def markdown_to_html_pandoc(markdown_text):
+        """Convert markdown to HTML using pandoc command-line tool"""
+        if not markdown_text:
+            return ""
+
+        try:
+            # Use pandoc to convert markdown to HTML
+            result = subprocess.run(
+                ['pandoc', '-f', 'markdown', '-t', 'html'],
+                input=markdown_text,
+                capture_output=True,
+                text=True,
+                encoding='utf-8',
+                timeout=30
+            )
+
+            if result.returncode == 0:
+                return result.stdout
+            else:
+                logger.warning(f"Pandoc conversion failed for {episode_dir.name}, falling back to escaped text")
+                # Fallback: just escape and wrap in paragraph
+                return f"<p>{escape_html(markdown_text)}</p>"
+
+        except FileNotFoundError:
+            logger.warning(f"Pandoc not found, falling back to escaped text for {episode_dir.name}")
+            # Fallback: just escape and wrap in paragraph
+            return f"<p>{escape_html(markdown_text)}</p>"
+        except subprocess.TimeoutExpired:
+            logger.warning(f"Pandoc timeout for {episode_dir.name}, falling back to escaped text")
+            return f"<p>{escape_html(markdown_text)}</p>"
+        except Exception as exc:
+            logger.warning(f"Pandoc error for {episode_dir.name}: {exc}, falling back to escaped text")
+            return f"<p>{escape_html(markdown_text)}</p>"
+
+    # Build the body content
+    body_content = f"<h1>{escape_html(page_title)}</h1>\n"
+
+    # Add embedded audio player if the podbean content_url is available
+    if content_url:
+        body_content += f"""
+<div class="audio-player-container">
+  <div class="audio-player-label">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+      <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+    </svg>
+  </div>
+  <audio controls preload="metadata">
+    <source src="{escape_html(content_url)}" type="audio/mpeg">
+    Your browser does not support the audio player. <a href="{escape_html(content_url)}" target="_blank" rel="noopener noreferrer">Download the episode</a>
+  </audio>
+</div>
+"""
+
+    if description:
+        body_content += f"\n<h2>Description</h2>\n"
+        body_content += f"<blockquote>\n{markdown_to_html_pandoc(description)}\n</blockquote>\n"
+
+    if summary:
+        body_content += f"\n<h2>Episode Summary</h2>\n"
+        body_content += markdown_to_html_pandoc(summary)
+
+    # Add transcript section if transcript file exists
+    transcript_file = None
+    transcript_content = ""
+
+    # Find the media file to get its basename
+    for file in episode_dir.iterdir():
+        if file.is_file() and file.suffix.lower() in MEDIA_EXTENSIONS:
+            transcript_file = file.with_suffix('.txt')
+            break
+
+    if transcript_file and transcript_file.exists():
+        try:
+            with open(transcript_file, 'r', encoding='utf-8', errors='replace') as f:
+                transcript_content = f.read()
+        except (OSError, IOError) as exc:
+            logger.warning(f"Error reading transcript from {episode_dir.name}: {exc}")
+
+    if transcript_content:
+        body_content += f"""
+<div class="transcript-section">
+  <h2>Transcript</h2>
+  <div class="transcript-toggle" onclick="toggleTranscript()">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+      <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/>
+    </svg>
+    Show Transcript
+  </div>
+  <div class="transcript-content" id="transcriptContent">
+    <pre>{escape_html(transcript_content)}</pre>
+  </div>
+</div>
+
+<script>
+function toggleTranscript() {{
+  const toggle = document.querySelector('.transcript-toggle');
+  const content = document.getElementById('transcriptContent');
+  toggle.classList.toggle('active');
+  content.classList.toggle('active');
+  
+  // Update button text
+  if (content.classList.contains('active')) {{
+    toggle.innerHTML = toggle.innerHTML.replace('Show', 'Hide');
+  }} else {{
+    toggle.innerHTML = toggle.innerHTML.replace('Hide', 'Show');
+  }}
+}}
+</script>
+"""
+
+    # Combine everything
+    html_content = html_prefix.format(title=escape_html(page_title)) + body_content + html_suffix
+
+    # Write to temp file first, then rename (atomic operation)
+    temp_html_file = html_file.with_suffix('.tmp')
+    try:
+        with open(temp_html_file, 'w', encoding='utf-8') as f:
+            f.write(html_content)
+        temp_html_file.rename(html_file)
+    except Exception as write_exc:
+        logger.error(f"Failed to write HTML file for {episode_dir.name}: {write_exc}")
+        if temp_html_file.exists():
+            temp_html_file.unlink()
+        return False
+
+    logger.info(f"SUCCESS - HTML generated: {html_file.name}")
+    return True
+
+
+def generate_all_html(root_dir: pathlib.Path = OUTPUT_ROOT) -> None:
+    """
+    Generate HTML files for all episodes in the root directory.
+
+    Args:
+        root_dir: Root directory containing episode folders
+    """
+    logger.info("=" * 70)
+    logger.info("Generating HTML files for all episodes")
+    logger.info("=" * 70)
+
+    if not root_dir.exists():
+        logger.error(f"Episode directory does not exist: {root_dir}")
+        return
+
+    # Get all episode directories
+    try:
+        episode_dirs = [d for d in root_dir.iterdir() if d.is_dir()]
+    except KeyboardInterrupt:
+        logger.warning("Interrupted by user while reading episode directories")
+        raise
+    except (PermissionError, OSError) as exc:
+        logger.error(f"Failed to read episode directories from {root_dir}: {exc}")
+        return
+
+    logger.info(f"Found {len(episode_dirs)} episode directories")
+
+    success_count = 0
+    skip_count = 0
+    fail_count = 0
+    i = 0  # Initialize to avoid reference before assignment in KeyboardInterrupt
+
+    try:
+        for i, episode_dir in enumerate(episode_dirs, start=1):
+            logger.info(f"\n{'='*70}")
+            logger.info(f"Processing episode {i}/{len(episode_dirs)}: {episode_dir.name}")
+            logger.info(f"{'='*70}")
+
+            # Check if HTML already exists
+            #html_file = episode_dir / "episode.html"
+            #if html_file.exists() and html_file.stat().st_size > 0:
+            #    logger.info(f"SKIP - HTML already exists")
+            #    skip_count += 1
+            #    continue
+
+            # Generate HTML
+            if generate_episode_html(episode_dir):
+                success_count += 1
+            else:
+                fail_count += 1
+    except KeyboardInterrupt:
+        logger.warning("\nInterrupted by user during HTML generation")
+        logger.info(f"Processed {i}/{len(episode_dirs)} episodes before interruption")
+
+    # Summary
+    logger.info("\n" + "=" * 70)
+    logger.info("HTML generation complete")
+    logger.info("=" * 70)
+    logger.info(f"Total episodes: {len(episode_dirs)}")
+    logger.info(f"Successfully generated: {success_count}")
+    logger.info(f"Already existed (skipped): {skip_count}")
+    logger.info(f"Failed: {fail_count}")
+    logger.info("=" * 70)
+
+
 def generate_all_keywords(root_dir: pathlib.Path = OUTPUT_ROOT, api_url: str = "http://10.0.0.1:1234/v1/chat/completions", api_key: str = "", model: str = "local-model") -> None:
     """
     Generate keyword lists for all episodes in the root directory.
@@ -688,6 +1146,7 @@ def main():
                 # Even if transcription exists, try to generate AI summary if missing
                 ai_summarize_episode(transcript_file)
                 generate_episode_keywords(episode_dir)
+                generate_episode_html(episode_dir)
                 continue
 
             # Transcribe the file
@@ -696,6 +1155,7 @@ def main():
                 # Generate AI summary after successful transcription
                 ai_summarize_episode(transcript_file)
                 generate_episode_keywords(episode_dir)
+                generate_episode_html(episode_dir)
             else:
                 fail_count += 1
 
