@@ -605,6 +605,16 @@ def generate_episode_html(episode_dir: pathlib.Path) -> bool:
         except (OSError, IOError) as exc:
             logger.warning(f"Error reading description from {episode_dir.name}: {exc}")
 
+    # Read keywords.json
+    keywords_file = episode_dir / "keywords.json"
+    keywords = ""
+    if keywords_file.exists():
+        try:
+            with open(keywords_file, 'r', encoding='utf-8', errors='replace') as f:
+                keywords = f.read()
+        except (OSError, IOError) as exc:
+            logger.warning(f"Error reading keywords.json from {episode_dir.name}: {exc}")
+
     # Read ai_show_summary.md (optional)
     summary_file = episode_dir / "ai_show_summary.md"
     summary = ""
@@ -869,7 +879,7 @@ audio::-webkit-media-controls-pause-button{{
 
     if description:
         body_content += f"\n<h2>Description</h2>\n"
-        body_content += f"<blockquote>\n{markdown_to_html_pandoc(description)}\n</blockquote>\n"
+        body_content += f"<blockquote>\n{description}\n</blockquote>\n"
 
     if summary:
         body_content += f"\n<h2>Episode Summary</h2>\n"
@@ -904,16 +914,16 @@ audio::-webkit-media-controls-pause-button{{
   </div>
   <div class="transcript-content" id="transcriptContent">
     <pre>{escape_html(transcript_content)}</pre>
+    <pre>{escape_html(keywords)}</pre>
   </div>
 </div>
-
 <script>
 function toggleTranscript() {{
   const toggle = document.querySelector('.transcript-toggle');
   const content = document.getElementById('transcriptContent');
   toggle.classList.toggle('active');
   content.classList.toggle('active');
-  
+
   // Update button text
   if (content.classList.contains('active')) {{
     toggle.innerHTML = toggle.innerHTML.replace('Show', 'Hide');

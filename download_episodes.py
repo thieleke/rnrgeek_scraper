@@ -75,7 +75,7 @@ logger.propagate = False
 
 # Podcast page download configuration
 BASE_URL = "https://www.podbean.com/podcast-detail/nmr9z-42c7f/The-Rock-and-Roll-Geek-Show-Podcast?page="
-NUM_PAGES = 263  # TODO: set this to the actual number of pages (accurate as of November 2025)
+NUM_PAGES = 270  # TODO: set this to the actual number of pages (accurate as of November 2025)
 PAGE_DELAY_IN_SEC = 1  # delay between downloading podcast list pages
 
 # Episode link extraction configuration
