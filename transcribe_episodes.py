@@ -882,7 +882,6 @@ audio::-webkit-media-controls-pause-button{{
         body_content += f"<blockquote>\n{description}\n</blockquote>\n"
 
     if summary:
-        body_content += f"\n<h2>Episode Summary</h2>\n"
         body_content += markdown_to_html_pandoc(summary)
 
     # Add transcript section if transcript file exists
